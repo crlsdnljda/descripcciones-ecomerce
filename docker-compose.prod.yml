@@ -1,61 +1,34 @@
 services:
-  # DB schema migration — runs once then exits
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   migrate:
     build:
       context: .
-      dockerfile: Dockerfile
       target: builder
-    container_name: descripcciones_migrate
-    working_dir: /app
-    command: npx drizzle-kit push --force
-    environment:
-      - DATABASE_URL=postgresql://desc_user:desc_password@postgres:5432/descripcciones
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
-    networks:
-      - internal
+    env_file: .env
+    command: npx drizzle-kit push --force
 
-  # Next.js app — no ports exposed (use reverse proxy)
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: descripcciones_app
-    restart: unless-stopped
-    environment:
-      - DATABASE_URL=postgresql://desc_user:desc_password@postgres:5432/descripcciones
-      - NODE_ENV=production
+    build: .
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    networks:
-      - internal
-
-  # PostgreSQL — no ports exposed
-  postgres:
-    image: postgres:16-alpine
-    container_name: descripcciones_db
+    env_file: .env
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: desc_user
-      POSTGRES_PASSWORD: desc_password
-      POSTGRES_DB: descripcciones
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U desc_user -d descripcciones"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - internal
 
 volumes:
-  postgres_data:
-
-networks:
-  internal:
-    driver: bridge
+  db_data:
