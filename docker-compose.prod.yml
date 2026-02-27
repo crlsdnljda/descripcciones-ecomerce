@@ -1,0 +1,61 @@
+services:
+  # DB schema migration — runs once then exits
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: descripcciones_migrate
+    working_dir: /app
+    command: npx drizzle-kit push --force
+    environment:
+      - DATABASE_URL=postgresql://desc_user:desc_password@postgres:5432/descripcciones
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # Next.js app — no ports exposed (use reverse proxy)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: descripcciones_app
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://desc_user:desc_password@postgres:5432/descripcciones
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+  # PostgreSQL — no ports exposed
+  postgres:
+    image: postgres:16-alpine
+    container_name: descripcciones_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: desc_user
+      POSTGRES_PASSWORD: desc_password
+      POSTGRES_DB: descripcciones
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U desc_user -d descripcciones"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    driver: bridge
