@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: descripcciones_db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: desc_user
+      POSTGRES_PASSWORD: desc_password
+      POSTGRES_DB: descripcciones
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U desc_user -d descripcciones"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - desc_network
+
+volumes:
+  postgres_data:
+
+networks:
+  desc_network:
+    driver: bridge
