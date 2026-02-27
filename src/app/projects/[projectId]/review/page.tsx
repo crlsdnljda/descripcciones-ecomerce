@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Check, Search, ChevronLeft, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { Check, Search, ChevronLeft, ChevronRight, Loader2, RefreshCw, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { DescriptionOutput } from "@/core/db/schema/descriptions";
 
@@ -23,7 +23,7 @@ export default function ReviewPage() {
   const [statusFilter, setStatusFilter] = useState<"generated" | "reviewed">("generated");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editDesc, setEditDesc] = useState("");
-  const [editMat, setEditMat] = useState("");
+  const [editMat, setEditMat] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -57,11 +57,7 @@ export default function ReviewPage() {
   const loadDescription = (desc: Description) => {
     const output = desc.outputJson;
     setEditDesc(output?.descripcion || "");
-    setEditMat(
-      output?.materiales
-        ? JSON.stringify(output.materiales, null, 2)
-        : ""
-    );
+    setEditMat(output?.materiales && typeof output.materiales === "object" ? output.materiales : {});
   };
 
   // Check for running generation jobs and poll progress
@@ -149,9 +145,7 @@ export default function ReviewPage() {
         } else {
           // Still in generated view — update in place
           setEditDesc(output?.descripcion || "");
-          setEditMat(
-            output?.materiales ? JSON.stringify(output.materiales, null, 2) : ""
-          );
+          setEditMat(output?.materiales && typeof output.materiales === "object" ? output.materiales : {});
           setDescriptions((prev) =>
             prev.map((d) =>
               d.id === current.id ? { ...d, outputJson: output } : d
@@ -171,17 +165,9 @@ export default function ReviewPage() {
   const saveAndApprove = async () => {
     if (!current) return;
 
-    let materiales: Record<string, string[]> = {};
-    try {
-      materiales = JSON.parse(editMat);
-    } catch {
-      toast.error("El JSON de materiales no es válido");
-      return;
-    }
-
     const outputJson: DescriptionOutput = {
       descripcion: editDesc,
-      materiales,
+      materiales: editMat,
     };
 
     try {
@@ -406,16 +392,81 @@ export default function ReviewPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium">Materiales (JSON)</label>
-              <textarea
-                value={editMat}
-                onChange={(e) => setEditMat(e.target.value)}
-                rows={8}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {`Formato: {"Empeine": ["material1", "material2"], "Suela": ["material1"]}`}
-              </p>
+              <label className="mb-1 block text-sm font-medium">Materiales</label>
+              <div className="space-y-3 rounded-md border border-border p-3">
+                {Object.entries(editMat).map(([zone, materials]) => (
+                  <div key={zone}>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{zone}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...editMat };
+                          delete updated[zone];
+                          setEditMat(updated);
+                        }}
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                        title="Eliminar zona"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {materials.map((mat, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
+                        >
+                          {mat}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = { ...editMat };
+                              updated[zone] = materials.filter((_, j) => j !== i);
+                              if (updated[zone].length === 0) delete updated[zone];
+                              setEditMat(updated);
+                            }}
+                            className="ml-0.5 text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const value = prompt(`Añadir material a "${zone}":`);
+                          if (value?.trim()) {
+                            const updated = { ...editMat };
+                            updated[zone] = [...materials, value.trim()];
+                            setEditMat(updated);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-accent hover:text-accent"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Añadir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(editMat).length === 0 && (
+                  <p className="text-xs text-muted-foreground">Sin materiales</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const zone = prompt("Nombre de la nueva zona (ej: Empeine, Suela, Forro y plantilla):");
+                    if (zone?.trim()) {
+                      setEditMat({ ...editMat, [zone.trim()]: [] });
+                    }
+                  }}
+                  className="flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent"
+                >
+                  <Plus className="h-3 w-3" />
+                  Nueva zona
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
