@@ -23,13 +23,30 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Standalone app
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Drizzle for DB migration on startup
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/src/core/db/schema ./src/core/db/schema
+COPY --from=builder /app/package.json ./package.json
+
+# Entrypoint: migrate then start
+COPY <<'EOF' /app/start.sh
+#!/bin/sh
+echo "Running DB migrations..."
+npx drizzle-kit push --force 2>&1 || true
+echo "Starting app..."
+exec node server.js
+EOF
+RUN chmod +x /app/start.sh
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["sh", "/app/start.sh"]

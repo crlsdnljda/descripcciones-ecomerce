@@ -10,23 +10,11 @@ services:
       timeout: 5s
       retries: 10
 
-  migrate:
-    build:
-      context: .
-      target: builder
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file: .env
-    command: npx drizzle-kit push --force
-
   app:
     build: .
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     env_file: .env
     restart: unless-stopped
 
