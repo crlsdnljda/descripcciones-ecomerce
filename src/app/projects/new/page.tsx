@@ -14,7 +14,6 @@ export default function NewProjectPage() {
     description: "",
     feedUrl: "",
     feedType: "json",
-    openaiApiKey: "",
     openaiModelGeneration: "gpt-4o",
     openaiModelTranslation: "gpt-4o-mini",
     languages: "fr, pt, de, it",
@@ -121,17 +120,6 @@ export default function NewProjectPage() {
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">OpenAI API Key</label>
-          <input
-            type="password"
-            value={form.openaiApiKey}
-            onChange={(e) => setForm({ ...form, openaiApiKey: e.target.value })}
-            placeholder="sk-..."
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">

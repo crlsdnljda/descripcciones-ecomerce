@@ -50,10 +50,10 @@ export async function POST(
       .from(projects)
       .where(eq(projects.id, projectId));
 
-    if (!project || !project.openaiApiKey) {
+    if (!project) {
       return NextResponse.json(
-        { error: "No OpenAI API key configured" },
-        { status: 400 }
+        { error: "Project not found" },
+        { status: 404 }
       );
     }
 
@@ -70,7 +70,6 @@ export async function POST(
     const output = await generateDescription(
       prompt,
       product.imageUrl,
-      project.openaiApiKey,
       project.openaiModelGeneration || "gpt-4o",
       project.systemPrompt
     );

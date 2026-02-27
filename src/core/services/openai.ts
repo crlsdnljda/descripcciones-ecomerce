@@ -26,11 +26,10 @@ Reglas de formato:
 export async function generateDescription(
   prompt: string,
   imageUrl: string | null,
-  apiKey: string,
   model: string = "gpt-4o",
   customSystemPrompt?: string | null
 ): Promise<DescriptionOutput> {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const systemText = customSystemPrompt
     ? `${SYSTEM_PROMPT_BASE}\n\n${customSystemPrompt}`
@@ -76,10 +75,9 @@ export async function generateDescription(
 export async function translateDescription(
   output: DescriptionOutput,
   targetLang: string,
-  apiKey: string,
   model: string = "gpt-4o-mini"
 ): Promise<DescriptionOutput> {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const prompt = `Traduce el siguiente contenido de producto al idioma "${targetLang}".
 Devuelve EXCLUSIVAMENTE un JSON con la misma estructura.

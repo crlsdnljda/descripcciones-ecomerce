@@ -12,7 +12,6 @@ async function processGeneration(
   projectId: string,
   matchedProducts: { id: string; externalId: string; rawData: unknown; imageUrl: string | null }[],
   promptTemplate: string,
-  apiKey: string,
   model: string,
   systemPrompt: string | null
 ) {
@@ -32,7 +31,6 @@ async function processGeneration(
       const output = await generateDescription(
         prompt,
         product.imageUrl,
-        apiKey,
         model,
         systemPrompt
       );
@@ -96,13 +94,6 @@ export async function POST(
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    if (!project.openaiApiKey) {
-      return NextResponse.json(
-        { error: "No OpenAI API key configured for this project" },
-        { status: 400 }
-      );
     }
 
     // Check for running generation jobs
@@ -198,7 +189,6 @@ export async function POST(
       projectId,
       allowedProducts,
       promptTemplate,
-      project.openaiApiKey,
       project.openaiModelGeneration || "gpt-4o",
       project.systemPrompt
     ).catch((err) => {

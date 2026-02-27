@@ -67,7 +67,6 @@ async function processTranslations(
   jobId: string,
   reviewedDescs: { id: string; outputJson: DescriptionOutput | null }[],
   langs: string[],
-  apiKey: string,
   model: string
 ) {
   const results: JobResult[] = [];
@@ -82,7 +81,6 @@ async function processTranslations(
         const output = await translateDescription(
           desc.outputJson,
           lang,
-          apiKey,
           model
         );
 
@@ -144,13 +142,6 @@ export async function POST(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    if (!project.openaiApiKey) {
-      return NextResponse.json(
-        { error: "No OpenAI API key configured" },
-        { status: 400 }
-      );
-    }
-
     const langs = requestedLangs || (project.languages as string[]) || [];
     if (!langs.length) {
       return NextResponse.json(
@@ -198,7 +189,6 @@ export async function POST(
       jobId,
       reviewedDescs,
       langs,
-      project.openaiApiKey,
       project.openaiModelTranslation || "gpt-4o-mini"
     ).catch((err) => {
       console.error("Background translation failed:", err);

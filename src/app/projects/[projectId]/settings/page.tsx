@@ -16,7 +16,6 @@ export default function ProjectSettingsPage() {
     feedType: "json",
     idColumn: "",
     imageColumn: "",
-    openaiApiKey: "",
     openaiModelGeneration: "gpt-4o",
     openaiModelTranslation: "gpt-4o-mini",
     systemPrompt: "",
@@ -38,7 +37,6 @@ export default function ProjectSettingsPage() {
         feedType: project.feedType || "json",
         idColumn: project.idColumn || "",
         imageColumn: project.imageColumn || "",
-        openaiApiKey: project.openaiApiKey || "",
         openaiModelGeneration: project.openaiModelGeneration || "gpt-4o",
         openaiModelTranslation: project.openaiModelTranslation || "gpt-4o-mini",
         systemPrompt: project.systemPrompt || "",
@@ -169,46 +167,35 @@ export default function ProjectSettingsPage() {
         )}
       </div>
 
-      {/* OpenAI Config */}
+      {/* OpenAI Models */}
       <div className="rounded-lg border border-border p-4">
-        <h3 className="mb-3 font-medium">OpenAI</h3>
-        <div className="space-y-3">
+        <h3 className="mb-3 font-medium">Modelos OpenAI</h3>
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium">API Key</label>
-            <input
-              type="password"
-              value={form.openaiApiKey}
-              onChange={(e) => setForm({ ...form, openaiApiKey: e.target.value })}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
-            />
+            <label className="mb-1 block text-sm font-medium">Modelo Generación</label>
+            <select
+              value={form.openaiModelGeneration}
+              onChange={(e) => setForm({ ...form, openaiModelGeneration: e.target.value })}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4.1">gpt-4.1</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Modelo Generación</label>
-              <select
-                value={form.openaiModelGeneration}
-                onChange={(e) => setForm({ ...form, openaiModelGeneration: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              >
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="gpt-4.1">gpt-4.1</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Modelo Traducción</label>
-              <select
-                value={form.openaiModelTranslation}
-                onChange={(e) => setForm({ ...form, openaiModelTranslation: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              >
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4.1-nano">gpt-4.1-nano</option>
-              </select>
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Modelo Traducción</label>
+            <select
+              value={form.openaiModelTranslation}
+              onChange={(e) => setForm({ ...form, openaiModelTranslation: e.target.value })}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              <option value="gpt-4.1-nano">gpt-4.1-nano</option>
+            </select>
           </div>
         </div>
       </div>
