@@ -11,7 +11,9 @@ services:
       retries: 10
 
   app:
-    build: .
+    build:
+      context: https://github.com/crlsdnljda/descripcciones-ecomerce.git
+      dockerfile: Dockerfile
     depends_on:
       db:
         condition: service_healthy
