@@ -13,7 +13,8 @@ async function processGeneration(
   matchedProducts: { id: string; externalId: string; rawData: unknown; imageUrl: string | null }[],
   promptTemplate: string,
   model: string,
-  systemPrompt: string | null
+  systemPrompt: string | null,
+  materialsLibrary: Record<string, string[]> | null
 ) {
   const results: JobResult[] = [];
   let completed = 0;
@@ -32,7 +33,8 @@ async function processGeneration(
         prompt,
         product.imageUrl,
         model,
-        systemPrompt
+        systemPrompt,
+        materialsLibrary
       );
 
       await db.insert(descriptions).values({
@@ -190,7 +192,8 @@ export async function POST(
       allowedProducts,
       promptTemplate,
       project.openaiModelGeneration || "gpt-4o",
-      project.systemPrompt
+      project.systemPrompt,
+      (project.materialsLibrary as Record<string, string[]>) || null
     ).catch((err) => {
       console.error("Background generation failed:", err);
       db.update(jobs)

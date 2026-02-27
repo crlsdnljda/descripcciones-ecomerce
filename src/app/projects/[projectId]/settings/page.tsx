@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Save } from "lucide-react";
+import { Save, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProjectSettingsPage() {
@@ -25,11 +25,20 @@ export default function ProjectSettingsPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Materials library
+  const [materialsLib, setMaterialsLib] = useState<Record<string, string[]>>({});
+  const [matManual, setMatManual] = useState<Record<string, string[]>>({});
+  const [addingMatTo, setAddingMatTo] = useState<string | null>(null);
+  const [matInput, setMatInput] = useState("");
+  const [addingMatZone, setAddingMatZone] = useState(false);
+  const [matZoneInput, setMatZoneInput] = useState("");
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/projects/${projectId}`).then((r) => r.json()),
       fetch(`/api/projects/${projectId}/columns`).then((r) => r.json()).catch(() => ({ columns: [] })),
-    ]).then(([project, colData]) => {
+      fetch(`/api/projects/${projectId}/materials`).then((r) => r.json()).catch(() => ({})),
+    ]).then(([project, colData, libData]) => {
       setForm({
         name: project.name || "",
         description: project.description || "",
@@ -43,6 +52,8 @@ export default function ProjectSettingsPage() {
         languages: (project.languages || []).join(", "),
       });
       setColumns(colData.columns || []);
+      setMatManual(project.materialsLibrary || {});
+      setMaterialsLib(libData || {});
       setLoading(false);
     });
   }, [projectId]);
@@ -61,6 +72,27 @@ export default function ProjectSettingsPage() {
         toast.success("Configuración guardada");
       } else {
         toast.error("Error al guardar");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const saveMaterials = async (updated: Record<string, string[]>) => {
+    setMatManual(updated);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/materials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        toast.success("Biblioteca de materiales actualizada");
+        // Refresh merged library
+        const libRes = await fetch(`/api/projects/${projectId}/materials`);
+        if (libRes.ok) setMaterialsLib(await libRes.json());
+      } else {
+        toast.error("Error al guardar materiales");
       }
     } catch {
       toast.error("Error de conexión");
@@ -212,6 +244,128 @@ export default function ProjectSettingsPage() {
           placeholder="Instrucciones adicionales para la IA..."
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
         />
+      </div>
+
+      {/* Materials Library */}
+      <div className="rounded-lg border border-border p-4">
+        <h3 className="mb-1 font-medium">Biblioteca de Materiales</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Materiales manuales + recopilados de descripciones revisadas. La IA los usará para mantener consistencia.
+        </p>
+        <div className="space-y-3">
+          {Object.entries(materialsLib).map(([zone, materials]) => (
+            <div key={zone}>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{zone}</span>
+                {matManual[zone] !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = { ...matManual };
+                      delete updated[zone];
+                      saveMaterials(updated);
+                    }}
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                    title="Eliminar zona manual"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {materials.map((mat) => (
+                  <span
+                    key={mat}
+                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
+                  >
+                    {mat}
+                    {matManual[zone]?.includes(mat) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...matManual };
+                          updated[zone] = (updated[zone] || []).filter((m) => m !== mat);
+                          if (updated[zone].length === 0) delete updated[zone];
+                          saveMaterials(updated);
+                        }}
+                        className="ml-0.5 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                ))}
+                {addingMatTo === zone ? (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={matInput}
+                      onChange={(e) => setMatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && matInput.trim()) {
+                          const updated = { ...matManual };
+                          updated[zone] = [...(updated[zone] || []), matInput.trim()];
+                          saveMaterials(updated);
+                          setMatInput("");
+                          setAddingMatTo(null);
+                        }
+                        if (e.key === "Escape") { setAddingMatTo(null); setMatInput(""); }
+                      }}
+                      onBlur={() => setTimeout(() => { setAddingMatTo(null); setMatInput(""); }, 150)}
+                      placeholder="Nuevo material..."
+                      className="w-36 rounded-full border border-accent bg-background px-2.5 py-1 text-xs focus:outline-none"
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setAddingMatTo(zone); setMatInput(""); }}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-accent hover:text-accent"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {Object.keys(materialsLib).length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Sin materiales todavía. Se irán añadiendo al revisar descripciones.
+            </p>
+          )}
+          {addingMatZone ? (
+            <div className="relative">
+              <input
+                type="text"
+                value={matZoneInput}
+                onChange={(e) => setMatZoneInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && matZoneInput.trim()) {
+                    const updated = { ...matManual, [matZoneInput.trim()]: [] };
+                    saveMaterials(updated);
+                    setMatZoneInput("");
+                    setAddingMatZone(false);
+                  }
+                  if (e.key === "Escape") { setAddingMatZone(false); setMatZoneInput(""); }
+                }}
+                onBlur={() => setTimeout(() => { setAddingMatZone(false); setMatZoneInput(""); }, 150)}
+                placeholder="Nombre de zona..."
+                className="w-44 rounded-md border border-accent bg-background px-3 py-1.5 text-xs focus:outline-none"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setAddingMatZone(true); setMatZoneInput(""); }}
+              className="flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent"
+            >
+              <Plus className="h-3 w-3" />
+              Nueva zona
+            </button>
+          )}
+        </div>
       </div>
 
       <button

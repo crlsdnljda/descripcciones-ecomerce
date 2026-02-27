@@ -27,13 +27,25 @@ export async function generateDescription(
   prompt: string,
   imageUrl: string | null,
   model: string = "gpt-4o",
-  customSystemPrompt?: string | null
+  customSystemPrompt?: string | null,
+  materialsLibrary?: Record<string, string[]> | null
 ): Promise<DescriptionOutput> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const systemText = customSystemPrompt
+  let systemText = customSystemPrompt
     ? `${SYSTEM_PROMPT_BASE}\n\n${customSystemPrompt}`
     : SYSTEM_PROMPT_BASE;
+
+  // Append materials library for consistency
+  if (materialsLibrary && Object.keys(materialsLibrary).length > 0) {
+    const libLines: string[] = [];
+    for (const [zone, mats] of Object.entries(materialsLibrary)) {
+      libLines.push(`  ${zone}: ${mats.join(", ")}`);
+    }
+    systemText += `\n\nBIBLIOTECA DE MATERIALES EXISTENTES (usa estos nombres exactos cuando corresponda para mantener consistencia):
+${libLines.join("\n")}
+Si el producto tiene materiales que no están en la biblioteca, puedes usar nombres nuevos.`;
+  }
 
   const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
     { type: "text", text: prompt },

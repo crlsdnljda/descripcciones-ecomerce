@@ -71,7 +71,8 @@ export async function POST(
       prompt,
       product.imageUrl,
       project.openaiModelGeneration || "gpt-4o",
-      project.systemPrompt
+      project.systemPrompt,
+      (project.materialsLibrary as Record<string, string[]>) || null
     );
 
     // Delete old translations (they're based on the old description)

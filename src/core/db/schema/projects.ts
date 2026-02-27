@@ -20,6 +20,7 @@ export const projects = pgTable("projects", {
   openaiModelTranslation: varchar("openai_model_translation", { length: 100 }).default("gpt-4o-mini"),
   systemPrompt: text("system_prompt"),
   languages: jsonb("languages").$type<string[]>().default(["fr", "pt", "de", "it"]),
+  materialsLibrary: jsonb("materials_library").$type<Record<string, string[]>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

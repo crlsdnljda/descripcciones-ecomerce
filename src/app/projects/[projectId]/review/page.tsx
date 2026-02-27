@@ -27,6 +27,15 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
 
+  // Materials library for autocomplete
+  const [materialsLib, setMaterialsLib] = useState<Record<string, string[]>>({});
+  const [addingTo, setAddingTo] = useState<string | null>(null); // zone name currently adding to
+  const [addInput, setAddInput] = useState("");
+  const [addingZone, setAddingZone] = useState(false);
+  const [zoneInput, setZoneInput] = useState("");
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const zoneInputRef = useRef<HTMLInputElement>(null);
+
   // Generation job progress
   const [genProgress, setGenProgress] = useState({ total: 0, completed: 0, errors: 0 });
   const [genRunning, setGenRunning] = useState(false);
@@ -99,9 +108,17 @@ export default function ReviewPage() {
     } catch {}
   };
 
+  const fetchMaterialsLib = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/materials`);
+      if (res.ok) setMaterialsLib(await res.json());
+    } catch {}
+  };
+
   useEffect(() => {
     fetchPending();
     checkRunningJob();
+    fetchMaterialsLib();
     return () => {
       if (genPollingRef.current) clearInterval(genPollingRef.current);
     };
@@ -432,40 +449,122 @@ export default function ReviewPage() {
                           </button>
                         </span>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const value = prompt(`Añadir material a "${zone}":`);
-                          if (value?.trim()) {
-                            const updated = { ...editMat };
-                            updated[zone] = [...materials, value.trim()];
-                            setEditMat(updated);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-accent hover:text-accent"
-                      >
-                        <Plus className="h-3 w-3" />
-                        Añadir
-                      </button>
+                      {addingTo === zone ? (
+                        <div className="relative">
+                          <input
+                            ref={addInputRef}
+                            type="text"
+                            value={addInput}
+                            onChange={(e) => setAddInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && addInput.trim()) {
+                                setEditMat({ ...editMat, [zone]: [...materials, addInput.trim()] });
+                                setAddInput("");
+                                setAddingTo(null);
+                              }
+                              if (e.key === "Escape") { setAddingTo(null); setAddInput(""); }
+                            }}
+                            onBlur={() => setTimeout(() => { setAddingTo(null); setAddInput(""); }, 150)}
+                            placeholder="Escribir material..."
+                            className="w-36 rounded-full border border-accent bg-background px-2.5 py-1 text-xs focus:outline-none"
+                            autoFocus
+                          />
+                          {/* Suggestions dropdown */}
+                          {materialsLib[zone]?.filter(
+                            (m) => !materials.includes(m) && m.toLowerCase().includes(addInput.toLowerCase())
+                          ).length > 0 && (
+                            <div className="absolute left-0 top-full z-10 mt-1 max-h-32 w-48 overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                              {materialsLib[zone]
+                                .filter((m) => !materials.includes(m) && m.toLowerCase().includes(addInput.toLowerCase()))
+                                .map((suggestion) => (
+                                  <button
+                                    key={suggestion}
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      setEditMat({ ...editMat, [zone]: [...materials, suggestion] });
+                                      setAddInput("");
+                                      setAddingTo(null);
+                                    }}
+                                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-muted"
+                                  >
+                                    {suggestion}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setAddingTo(zone); setAddInput(""); }}
+                          className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-accent hover:text-accent"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Añadir
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
                 {Object.keys(editMat).length === 0 && (
                   <p className="text-xs text-muted-foreground">Sin materiales</p>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const zone = prompt("Nombre de la nueva zona (ej: Empeine, Suela, Forro y plantilla):");
-                    if (zone?.trim()) {
-                      setEditMat({ ...editMat, [zone.trim()]: [] });
-                    }
-                  }}
-                  className="flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent"
-                >
-                  <Plus className="h-3 w-3" />
-                  Nueva zona
-                </button>
+                {addingZone ? (
+                  <div className="relative">
+                    <input
+                      ref={zoneInputRef}
+                      type="text"
+                      value={zoneInput}
+                      onChange={(e) => setZoneInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && zoneInput.trim()) {
+                          setEditMat({ ...editMat, [zoneInput.trim()]: [] });
+                          setZoneInput("");
+                          setAddingZone(false);
+                        }
+                        if (e.key === "Escape") { setAddingZone(false); setZoneInput(""); }
+                      }}
+                      onBlur={() => setTimeout(() => { setAddingZone(false); setZoneInput(""); }, 150)}
+                      placeholder="Nombre de zona..."
+                      className="w-44 rounded-md border border-accent bg-background px-3 py-1.5 text-xs focus:outline-none"
+                      autoFocus
+                    />
+                    {/* Zone suggestions */}
+                    {Object.keys(materialsLib)
+                      .filter((z) => !(z in editMat) && z.toLowerCase().includes(zoneInput.toLowerCase()))
+                      .length > 0 && (
+                      <div className="absolute left-0 top-full z-10 mt-1 max-h-32 w-48 overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                        {Object.keys(materialsLib)
+                          .filter((z) => !(z in editMat) && z.toLowerCase().includes(zoneInput.toLowerCase()))
+                          .map((z) => (
+                            <button
+                              key={z}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setEditMat({ ...editMat, [z]: [] });
+                                setZoneInput("");
+                                setAddingZone(false);
+                              }}
+                              className="block w-full px-3 py-1.5 text-left text-xs hover:bg-muted"
+                            >
+                              {z}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setAddingZone(true); setZoneInput(""); }}
+                    className="flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Nueva zona
+                  </button>
+                )}
               </div>
             </div>
 
