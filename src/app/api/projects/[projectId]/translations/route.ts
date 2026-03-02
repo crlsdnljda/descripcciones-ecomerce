@@ -3,7 +3,7 @@ import { db } from "@/core/db";
 import { projects, descriptions, translations, products, jobs } from "@/core/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { generateId } from "@/lib/utils";
-import { translateDescription } from "@/core/services/openai";
+import { translateDescriptionBatch } from "@/core/services/openai";
 import type { DescriptionOutput } from "@/core/db/schema/descriptions";
 import type { JobResult } from "@/core/db/schema/jobs";
 
@@ -62,7 +62,7 @@ export async function GET(
   }
 }
 
-// Background processor for translations
+// Background processor for translations — one API call per product for all languages
 async function processTranslations(
   jobId: string,
   reviewedDescs: { id: string; outputJson: DescriptionOutput | null }[],
@@ -76,23 +76,40 @@ async function processTranslations(
   for (const desc of reviewedDescs) {
     if (!desc.outputJson) continue;
 
-    for (const lang of langs) {
-      try {
-        const output = await translateDescription(
-          desc.outputJson,
-          lang,
-          model
-        );
+    // Find which languages still need translation for this description
+    const existing = await db
+      .select({ language: translations.language })
+      .from(translations)
+      .where(eq(translations.descriptionId, desc.id));
+    const existingLangs = new Set(existing.map((e) => e.language));
+    const missingLangs = langs.filter((l) => !existingLangs.has(l));
 
-        // Delete old translation if exists, then insert new one
-        await db
-          .delete(translations)
-          .where(
-            and(
-              eq(translations.descriptionId, desc.id),
-              eq(translations.language, lang)
-            )
-          );
+    if (!missingLangs.length) {
+      completed += langs.length;
+      for (const lang of langs) {
+        results.push({ ref: `${desc.id}→${lang}`, status: "ok" });
+      }
+      await db
+        .update(jobs)
+        .set({ completed, errors: errorCount, results, updatedAt: new Date() })
+        .where(eq(jobs.id, jobId));
+      continue;
+    }
+
+    try {
+      const batch = await translateDescriptionBatch(
+        desc.outputJson,
+        missingLangs,
+        model
+      );
+
+      for (const lang of missingLangs) {
+        const output = batch[lang];
+        if (!output) {
+          errorCount++;
+          results.push({ ref: `${desc.id}→${lang}`, status: "error", error: "Missing from batch response" });
+          continue;
+        }
 
         await db.insert(translations).values({
           id: generateId(),
@@ -103,17 +120,23 @@ async function processTranslations(
 
         completed++;
         results.push({ ref: `${desc.id}→${lang}`, status: "ok" });
-      } catch (error) {
-        errorCount++;
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        results.push({ ref: `${desc.id}→${lang}`, status: "error", error: msg });
       }
 
-      await db
-        .update(jobs)
-        .set({ completed, errors: errorCount, results, updatedAt: new Date() })
-        .where(eq(jobs.id, jobId));
+      // Count already-existing langs as completed too
+      completed += langs.length - missingLangs.length;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      for (const lang of missingLangs) {
+        errorCount++;
+        results.push({ ref: `${desc.id}→${lang}`, status: "error", error: msg });
+      }
+      completed += langs.length - missingLangs.length;
     }
+
+    await db
+      .update(jobs)
+      .set({ completed, errors: errorCount, results, updatedAt: new Date() })
+      .where(eq(jobs.id, jobId));
   }
 
   await db

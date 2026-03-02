@@ -113,47 +113,62 @@ const LANG_NAMES: Record<string, string> = {
 };
 
 /**
- * Call OpenAI to translate a description to another language.
+ * Call OpenAI to translate a description to multiple languages in one call.
+ * Returns a Record mapping each language code to its translated DescriptionOutput.
  */
-export async function translateDescription(
+export async function translateDescriptionBatch(
   output: DescriptionOutput,
-  targetLang: string,
+  targetLangs: string[],
   model: string = "gpt-4o-mini"
-): Promise<DescriptionOutput> {
+): Promise<Record<string, DescriptionOutput>> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const langName = LANG_NAMES[targetLang] || targetLang;
+  const langList = targetLangs
+    .map((code) => `"${code}": ${LANG_NAMES[code] || code}`)
+    .join(", ");
 
-  const prompt = `Translate the following product content to ${langName}.
-Return ONLY a valid JSON with the exact same structure.
-The keys in "materiales" must also be translated to ${langName}.
-The "descripcion" value MUST contain the full translated text, never empty.
+  const prompt = `Translate the following product content to these languages: ${langList}.
+
+Return a JSON object where each key is the language code and the value is the translated content with the same structure {"descripcion": "...", "materiales": {...}}.
+The "descripcion" MUST contain the full translated text for each language, never empty.
+The keys inside "materiales" must also be translated to each target language.
 
 Content to translate:
 ${JSON.stringify(output, null, 2)}
 
-Return only the translated JSON, no additional text.`;
+Expected response format:
+{
+  ${targetLangs.map((code) => `"${code}": { "descripcion": "translated text...", "materiales": { ... } }`).join(",\n  ")}
+}
+
+Return only the JSON, no additional text.`;
 
   const completion = await client.chat.completions.create({
     model,
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
     temperature: 0.3,
-    max_tokens: 2048,
+    max_tokens: 4096,
   });
 
   const text = completion.choices[0]?.message?.content || "{}";
   const parsed = JSON.parse(text);
 
-  const descripcion = typeof parsed.descripcion === "string" ? parsed.descripcion : "";
-  const materiales =
-    parsed.materiales && typeof parsed.materiales === "object"
-      ? parsed.materiales
-      : {};
+  const result: Record<string, DescriptionOutput> = {};
 
-  if (!descripcion.trim()) {
-    throw new Error(`Translation to ${targetLang} returned empty descripcion`);
+  for (const lang of targetLangs) {
+    const entry = parsed[lang];
+    if (!entry || typeof entry.descripcion !== "string" || !entry.descripcion.trim()) {
+      throw new Error(`Translation to ${lang} returned empty or missing descripcion`);
+    }
+    result[lang] = {
+      descripcion: entry.descripcion,
+      materiales:
+        entry.materiales && typeof entry.materiales === "object"
+          ? entry.materiales
+          : {},
+    };
   }
 
-  return { descripcion, materiales };
+  return result;
 }
