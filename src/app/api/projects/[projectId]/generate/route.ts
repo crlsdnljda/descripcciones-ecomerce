@@ -159,11 +159,14 @@ export async function POST(
     const skippedCount = matchedProducts.length - allowedProducts.length;
 
     if (!allowedProducts.length) {
+      const parts = [`Las ${skippedCount} referencias ya tienen descripciones`];
+      if (notFoundCount > 0) parts.push(`${notFoundCount} no encontradas en productos`);
       return NextResponse.json({
         jobId: null,
-        message: `Las ${matchedProducts.length} referencias ya tienen descripciones (generadas o revisadas)`,
+        message: parts.join(" | "),
         total: 0,
         skipped: skippedCount,
+        notFound: notFoundCount,
       });
     }
 

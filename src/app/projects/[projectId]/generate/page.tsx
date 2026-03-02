@@ -446,7 +446,7 @@ export default function GeneratePage() {
               )}
               {regen.length > 0 && (
                 <div className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-amber-600 dark:text-amber-400">
-                  <strong>{regen.length}</strong> ya revisadas (se re-generarán)
+                  <strong>{regen.length}</strong> ya revisadas (se saltan)
                 </div>
               )}
               {ok.length > 0 && (
@@ -479,7 +479,7 @@ export default function GeneratePage() {
                   st === "generated"
                     ? "En revisión — no se generará"
                     : st === "reviewed"
-                    ? "Ya revisada — se re-generará"
+                    ? "Ya revisada — se salta"
                     : "Nueva — se generará"
                 }
               >
