@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Check, Search, ChevronLeft, ChevronRight, Loader2, RefreshCw, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { DescriptionOutput } from "@/core/db/schema/descriptions";
+import { isFootwear } from "@/lib/footwear";
 
 interface Description {
   id: string;
@@ -13,19 +14,6 @@ interface Description {
   categoria: string | null;
   outputJson: DescriptionOutput | null;
   status: string;
-}
-
-const FOOTWEAR_CATEGORIES = new Set([
-  "alpargatas", "bailarinas", "botas", "botas de agua", "botas de fútbol",
-  "botines", "calzado respetuoso", "chanclas", "mocasines", "náuticos",
-  "sandalias", "sneakers", "zapatillas", "zapatillas con luces",
-  "zapatillas de casa", "zapatos", "zapatos bebé", "zapatos deportivos",
-  "zapatos respetuosos bebe", "zuecos",
-]);
-
-function isFootwear(categoria: string | null | undefined): boolean {
-  if (!categoria) return false;
-  return FOOTWEAR_CATEGORIES.has(categoria.toLowerCase());
 }
 
 export default function ReviewPage() {

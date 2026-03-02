@@ -129,8 +129,10 @@ export async function translateDescriptionBatch(
     .map((code) => `"${code}": ${LANG_NAMES[code] || code}`)
     .join(", ");
 
+  const hasMaterials = output.materiales && Object.keys(output.materiales).length > 0;
+
   let referenceBlock = "";
-  if (existingTranslations && Object.keys(existingTranslations).length > 0) {
+  if (hasMaterials && existingTranslations && Object.keys(existingTranslations).length > 0) {
     const lines: string[] = [];
     for (const [lang, mats] of Object.entries(existingTranslations)) {
       const matLines = Object.entries(mats)
@@ -143,23 +145,31 @@ export async function translateDescriptionBatch(
     }
   }
 
+  const materialsRules = hasMaterials
+    ? `- The keys inside "materiales" (zone names) must be translated to each target language.
+- Material VALUES must be Capitalized (first letter uppercase), e.g. "caucho" → "Caucho", "rubber" → "Rubber".
+- If a zone has multiple materials, keep them as an array: ["Sintético", "Textil"].
+- Translate the zone keys AND the material values to each target language.`
+    : `- "materiales" must be an empty object {} (this product has no materials).`;
+
+  const exampleMaterials = hasMaterials
+    ? `"TranslatedZone": ["Material1", "Material2"]`
+    : "";
+
   const prompt = `Translate the following product content to these languages: ${langList}.
 
 Return a JSON object where each key is the language code and the value has the structure {"descripcion": "...", "materiales": {...}}.
 
 Rules:
 - "descripcion" MUST contain the full translated text for each language, never empty.
-- The keys inside "materiales" (zone names) must be translated to each target language.
-- Material VALUES must be Capitalized (first letter uppercase), e.g. "caucho" → "Caucho", "rubber" → "Rubber".
-- If a zone has multiple materials, keep them as an array: ["Sintético", "Textil"].
-- Translate the zone keys AND the material values to each target language.
+${materialsRules}
 
 Content to translate:
 ${JSON.stringify(output, null, 2)}${referenceBlock}
 
 Expected response format:
 {
-  ${targetLangs.map((code) => `"${code}": { "descripcion": "translated text...", "materiales": { "TranslatedZone": ["Material1", "Material2"] } }`).join(",\n  ")}
+  ${targetLangs.map((code) => `"${code}": { "descripcion": "translated text...", "materiales": { ${exampleMaterials} } }`).join(",\n  ")}
 }
 
 Return only the JSON, no additional text.`;

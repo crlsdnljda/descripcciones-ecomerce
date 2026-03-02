@@ -3,6 +3,7 @@ import { db } from "@/core/db";
 import { projects, products, descriptions, jobs } from "@/core/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "@/lib/utils";
+import { isFootwear } from "@/lib/footwear";
 import { generateDescription } from "@/core/services/openai";
 import type { JobResult } from "@/core/db/schema/jobs";
 
@@ -29,13 +30,22 @@ async function processGeneration(
         prompt = prompt.replaceAll(`{{${key}}}`, String(value ?? ""));
       }
 
+      const categoria = String(
+        rawData.categoria ?? rawData.category ?? rawData.product_type ?? ""
+      );
+
       const output = await generateDescription(
         prompt,
         product.imageUrl,
         model,
         systemPrompt,
-        materialsLibrary
+        isFootwear(categoria) ? materialsLibrary : null
       );
+
+      // Non-footwear products get empty materials
+      if (!isFootwear(categoria)) {
+        output.materiales = {};
+      }
 
       await db.insert(descriptions).values({
         id: generateId(),
