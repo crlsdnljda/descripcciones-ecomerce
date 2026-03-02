@@ -127,15 +127,35 @@ export async function POST(
       );
     }
 
-    // Get products matching references
+    // Get products matching references (by externalId first, then by any rawData value)
     const allProducts = await db
       .select()
       .from(products)
       .where(eq(products.projectId, projectId));
 
-    const matchedProducts = allProducts.filter((p) =>
-      references.includes(p.externalId)
-    );
+    const byExtId = new Map(allProducts.map((p) => [p.externalId, p]));
+
+    // Build secondary index: rawData string values → product (skip values already in byExtId)
+    const byRawValue = new Map<string, (typeof allProducts)[0]>();
+    for (const p of allProducts) {
+      const rawData = p.rawData as Record<string, unknown>;
+      for (const value of Object.values(rawData)) {
+        const str = String(value ?? "").trim();
+        if (str && !byExtId.has(str) && !byRawValue.has(str)) {
+          byRawValue.set(str, p);
+        }
+      }
+    }
+
+    const matchedSet = new Set<string>();
+    const matchedProducts: (typeof allProducts)[0][] = [];
+    for (const ref of references) {
+      const p = byExtId.get(ref) || byRawValue.get(ref);
+      if (p && !matchedSet.has(p.id)) {
+        matchedSet.add(p.id);
+        matchedProducts.push(p);
+      }
+    }
 
     const notFoundCount = references.length - matchedProducts.length;
 

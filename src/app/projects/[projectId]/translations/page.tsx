@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Languages, RefreshCw, Search, Trash2, Eye, X } from "lucide-react";
+import { Languages, RefreshCw, Search, Trash2, Eye, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { DescriptionOutput } from "@/core/db/schema/descriptions";
 
@@ -26,6 +26,8 @@ export default function TranslationsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; ref: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [viewRow, setViewRow] = useState<TranslationRow | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 25;
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = async () => {
@@ -137,6 +139,10 @@ export default function TranslationsPage() {
     ? rows.filter((r) => r.referencia.toLowerCase().includes(search.toLowerCase()))
     : rows;
 
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   if (loading) {
     return <div className="py-10 text-center text-muted-foreground">Cargando...</div>;
   }
@@ -165,7 +171,7 @@ export default function TranslationsPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Buscar referencia..."
             className="rounded-md border border-border py-1.5 pl-9 pr-3 text-sm focus:border-accent focus:outline-none"
           />
@@ -309,6 +315,7 @@ export default function TranslationsPage() {
           </p>
         </div>
       ) : (
+        <>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -325,7 +332,7 @@ export default function TranslationsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row) => {
+              {paginatedRows.map((row) => {
                 const hasTranslations = Object.values(row.translations).some((t) => t !== null);
                 return (
                   <tr key={row.descriptionId} className="border-b border-border hover:bg-muted/30 cursor-pointer" onClick={() => setViewRow(row)}>
@@ -371,6 +378,35 @@ export default function TranslationsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredRows.length)} de {filteredRows.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="rounded-md border border-border p-1.5 text-sm hover:bg-muted disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-3 text-sm">
+                {safePage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="rounded-md border border-border p-1.5 text-sm hover:bg-muted disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

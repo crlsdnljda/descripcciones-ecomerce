@@ -17,11 +17,24 @@ export async function GET(
 
   // Get products for this project
   const prods = await db
-    .select({ id: products.id, externalId: products.externalId })
+    .select({ id: products.id, externalId: products.externalId, rawData: products.rawData })
     .from(products)
     .where(eq(products.projectId, projectId));
 
+  // Primary index: externalId → productId
   const prodMap = new Map(prods.map((p) => [p.externalId, p.id]));
+
+  // Secondary index: rawData string values → productId (for references that don't match externalId)
+  const rawValueMap = new Map<string, string>();
+  for (const p of prods) {
+    const rawData = p.rawData as Record<string, unknown>;
+    for (const value of Object.values(rawData)) {
+      const str = String(value ?? "").trim();
+      if (str && !prodMap.has(str) && !rawValueMap.has(str)) {
+        rawValueMap.set(str, p.id);
+      }
+    }
+  }
 
   // Get descriptions for this project
   const descs = await db
@@ -49,7 +62,7 @@ export async function GET(
   // "not_found" = reference not in products
   const statuses: Record<string, string> = {};
   for (const ref of refs) {
-    const productId = prodMap.get(ref);
+    const productId = prodMap.get(ref) || rawValueMap.get(ref);
     if (!productId) {
       statuses[ref] = "not_found";
       continue;
