@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Languages, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Languages, RefreshCw, Search, Trash2, Eye, X } from "lucide-react";
 import { toast } from "sonner";
 import type { DescriptionOutput } from "@/core/db/schema/descriptions";
 
@@ -25,6 +25,7 @@ export default function TranslationsPage() {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; ref: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [viewRow, setViewRow] = useState<TranslationRow | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = async () => {
@@ -230,6 +231,74 @@ export default function TranslationsPage() {
         </div>
       )}
 
+      {/* Detail modal */}
+      {viewRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setViewRow(null)}>
+          <div
+            className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setViewRow(null)}
+              className="absolute right-3 top-3 rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="mb-4 font-mono text-lg font-bold">{viewRow.referencia}</h3>
+
+            {/* ES description */}
+            <div className="mb-4">
+              <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">es — Descripción</h4>
+              <div className="whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm">
+                {viewRow.es?.descripcion || <span className="italic text-muted-foreground">Sin descripción</span>}
+              </div>
+            </div>
+
+            {/* ES materials */}
+            {viewRow.es?.materiales && Object.keys(viewRow.es.materiales).length > 0 && (
+              <div className="mb-4">
+                <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">es — Materiales</h4>
+                <div className="space-y-1 rounded-md bg-muted/50 p-3 text-sm">
+                  {Object.entries(viewRow.es.materiales).map(([zone, mats]) => (
+                    <div key={zone}>
+                      <span className="font-semibold">{zone}:</span>{" "}
+                      <span className="text-muted-foreground">{(mats as string[]).join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Translations */}
+            {languages.map((lang) => {
+              const t = viewRow.translations[lang];
+              return (
+                <div key={lang} className="mb-4">
+                  <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">{lang} — Descripción</h4>
+                  <div className="whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm">
+                    {t?.descripcion || <span className="italic text-muted-foreground">Pendiente de traducir</span>}
+                  </div>
+                  {t?.materiales && Object.keys(t.materiales).length > 0 && (
+                    <div className="mt-2">
+                      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">{lang} — Materiales</h4>
+                      <div className="space-y-1 rounded-md bg-muted/50 p-3 text-sm">
+                        {Object.entries(t.materiales).map(([zone, mats]) => (
+                          <div key={zone}>
+                            <span className="font-semibold">{zone}:</span>{" "}
+                            <span className="text-muted-foreground">{(mats as string[]).join(", ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-16 text-center">
           <p className="text-muted-foreground">
@@ -259,9 +328,12 @@ export default function TranslationsPage() {
               {filteredRows.map((row) => {
                 const hasTranslations = Object.values(row.translations).some((t) => t !== null);
                 return (
-                  <tr key={row.descriptionId} className="border-b border-border hover:bg-muted/30">
+                  <tr key={row.descriptionId} className="border-b border-border hover:bg-muted/30 cursor-pointer" onClick={() => setViewRow(row)}>
                     <td className="px-3 py-2 font-mono text-xs font-bold">
-                      {row.referencia}
+                      <span className="flex items-center gap-1.5">
+                        <Eye className="h-3 w-3 text-muted-foreground" />
+                        {row.referencia}
+                      </span>
                     </td>
                     <td className="max-w-[200px] truncate px-3 py-2 text-xs" title={row.es?.descripcion}>
                       {row.es?.descripcion?.slice(0, 80)}...
@@ -285,7 +357,7 @@ export default function TranslationsPage() {
                     <td className="px-3 py-2 text-center">
                       {hasTranslations && (
                         <button
-                          onClick={() => setDeleteTarget({ id: row.descriptionId, ref: row.referencia })}
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: row.descriptionId, ref: row.referencia }); }}
                           className="rounded p-1 text-muted-foreground hover:text-destructive"
                           title="Eliminar traducciones"
                         >
