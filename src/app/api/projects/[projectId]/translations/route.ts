@@ -62,9 +62,42 @@ export async function GET(
   }
 }
 
+// Collect existing translated materials per language for consistency reference
+async function getExistingMaterialsRef(
+  projectId: string,
+  langs: string[]
+): Promise<Record<string, Record<string, string[]>>> {
+  const allTrans = await db
+    .select({ language: translations.language, outputJson: translations.outputJson })
+    .from(translations)
+    .where(
+      sql`${translations.descriptionId} IN (
+        SELECT id FROM descriptions WHERE project_id = ${projectId}
+      ) AND ${translations.language} IN (${sql.join(langs.map((l) => sql`${l}`), sql`, `)})`
+    );
+
+  const ref: Record<string, Record<string, string[]>> = {};
+  for (const t of allTrans) {
+    if (!t.outputJson?.materiales) continue;
+    if (!ref[t.language]) ref[t.language] = {};
+    for (const [zone, vals] of Object.entries(t.outputJson.materiales)) {
+      const arr = Array.isArray(vals) ? vals as string[] : [String(vals)];
+      if (!ref[t.language][zone]) {
+        ref[t.language][zone] = [...arr];
+      } else {
+        for (const v of arr) {
+          if (!ref[t.language][zone].includes(v)) ref[t.language][zone].push(v);
+        }
+      }
+    }
+  }
+  return ref;
+}
+
 // Background processor for translations — one API call per product for all languages
 async function processTranslations(
   jobId: string,
+  projectId: string,
   reviewedDescs: { id: string; outputJson: DescriptionOutput | null }[],
   langs: string[],
   model: string
@@ -72,6 +105,12 @@ async function processTranslations(
   const results: JobResult[] = [];
   let completed = 0;
   let errorCount = 0;
+
+  // Gather existing translated materials for consistency
+  let existingMatsRef: Record<string, Record<string, string[]>> = {};
+  try {
+    existingMatsRef = await getExistingMaterialsRef(projectId, langs);
+  } catch { /* ignore, just won't have reference */ }
 
   for (const desc of reviewedDescs) {
     if (!desc.outputJson) continue;
@@ -100,7 +139,8 @@ async function processTranslations(
       const batch = await translateDescriptionBatch(
         desc.outputJson,
         missingLangs,
-        model
+        model,
+        existingMatsRef
       );
 
       for (const lang of missingLangs) {
@@ -117,6 +157,21 @@ async function processTranslations(
           language: lang,
           outputJson: output,
         });
+
+        // Update reference with new materials for next products
+        if (output.materiales) {
+          if (!existingMatsRef[lang]) existingMatsRef[lang] = {};
+          for (const [zone, vals] of Object.entries(output.materiales)) {
+            const arr = Array.isArray(vals) ? vals as string[] : [String(vals)];
+            if (!existingMatsRef[lang][zone]) {
+              existingMatsRef[lang][zone] = [...arr];
+            } else {
+              for (const v of arr) {
+                if (!existingMatsRef[lang][zone].includes(v)) existingMatsRef[lang][zone].push(v);
+              }
+            }
+          }
+        }
 
         completed++;
         results.push({ ref: `${desc.id}→${lang}`, status: "ok" });
@@ -210,6 +265,7 @@ export async function POST(
     // Fire-and-forget
     processTranslations(
       jobId,
+      projectId,
       reviewedDescs,
       langs,
       project.openaiModelTranslation || "gpt-4o-mini"

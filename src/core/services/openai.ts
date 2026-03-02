@@ -115,11 +115,13 @@ const LANG_NAMES: Record<string, string> = {
 /**
  * Call OpenAI to translate a description to multiple languages in one call.
  * Returns a Record mapping each language code to its translated DescriptionOutput.
+ * existingTranslations: previously translated materials per language for consistency.
  */
 export async function translateDescriptionBatch(
   output: DescriptionOutput,
   targetLangs: string[],
-  model: string = "gpt-4o-mini"
+  model: string = "gpt-4o-mini",
+  existingTranslations?: Record<string, Record<string, string[]>>
 ): Promise<Record<string, DescriptionOutput>> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -127,18 +129,37 @@ export async function translateDescriptionBatch(
     .map((code) => `"${code}": ${LANG_NAMES[code] || code}`)
     .join(", ");
 
+  let referenceBlock = "";
+  if (existingTranslations && Object.keys(existingTranslations).length > 0) {
+    const lines: string[] = [];
+    for (const [lang, mats] of Object.entries(existingTranslations)) {
+      const matLines = Object.entries(mats)
+        .map(([zone, vals]) => `  ${zone}: ${vals.join(", ")}`)
+        .join("\n");
+      if (matLines) lines.push(`${LANG_NAMES[lang] || lang}:\n${matLines}`);
+    }
+    if (lines.length) {
+      referenceBlock = `\n\nREFERENCE — Previously translated materials (reuse these exact terms for consistency):\n${lines.join("\n\n")}`;
+    }
+  }
+
   const prompt = `Translate the following product content to these languages: ${langList}.
 
-Return a JSON object where each key is the language code and the value is the translated content with the same structure {"descripcion": "...", "materiales": {...}}.
-The "descripcion" MUST contain the full translated text for each language, never empty.
-The keys inside "materiales" must also be translated to each target language.
+Return a JSON object where each key is the language code and the value has the structure {"descripcion": "...", "materiales": {...}}.
+
+Rules:
+- "descripcion" MUST contain the full translated text for each language, never empty.
+- The keys inside "materiales" (zone names) must be translated to each target language.
+- Material VALUES must be Capitalized (first letter uppercase), e.g. "caucho" → "Caucho", "rubber" → "Rubber".
+- If a zone has multiple materials, keep them as an array: ["Sintético", "Textil"].
+- Translate the zone keys AND the material values to each target language.
 
 Content to translate:
-${JSON.stringify(output, null, 2)}
+${JSON.stringify(output, null, 2)}${referenceBlock}
 
 Expected response format:
 {
-  ${targetLangs.map((code) => `"${code}": { "descripcion": "translated text...", "materiales": { ... } }`).join(",\n  ")}
+  ${targetLangs.map((code) => `"${code}": { "descripcion": "translated text...", "materiales": { "TranslatedZone": ["Material1", "Material2"] } }`).join(",\n  ")}
 }
 
 Return only the JSON, no additional text.`;
@@ -161,13 +182,20 @@ Return only the JSON, no additional text.`;
     if (!entry || typeof entry.descripcion !== "string" || !entry.descripcion.trim()) {
       throw new Error(`Translation to ${lang} returned empty or missing descripcion`);
     }
-    result[lang] = {
-      descripcion: entry.descripcion,
-      materiales:
-        entry.materiales && typeof entry.materiales === "object"
-          ? entry.materiales
-          : {},
-    };
+
+    // Capitalize material values
+    const materiales: Record<string, string[]> = {};
+    if (entry.materiales && typeof entry.materiales === "object") {
+      for (const [zone, vals] of Object.entries(entry.materiales)) {
+        const arr = Array.isArray(vals) ? vals : [vals];
+        materiales[zone] = arr.map((v: unknown) => {
+          const s = String(v).trim();
+          return s.charAt(0).toUpperCase() + s.slice(1);
+        });
+      }
+    }
+
+    result[lang] = { descripcion: entry.descripcion, materiales };
   }
 
   return result;
