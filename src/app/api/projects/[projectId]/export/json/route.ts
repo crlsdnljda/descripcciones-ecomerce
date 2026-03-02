@@ -23,12 +23,14 @@ export async function GET(
     }
 
     const langs = (project.languages as string[]) || [];
+    const idColumn = project.idColumn;
 
     // Get reviewed descriptions with product info
     const reviewedDescs = await db
       .select({
         descId: descriptions.id,
         externalId: products.externalId,
+        rawData: products.rawData,
         outputJson: descriptions.outputJson,
       })
       .from(descriptions)
@@ -53,8 +55,12 @@ export async function GET(
     // Build output rows
     const rows = reviewedDescs.map((desc) => {
       const es = desc.outputJson as DescriptionOutput | null;
+      const raw = desc.rawData as Record<string, unknown>;
+      const ref = idColumn && raw[idColumn] != null
+        ? String(raw[idColumn])
+        : desc.externalId;
       const row: Record<string, unknown> = {
-        Referencia: desc.externalId,
+        Referencia: ref,
         es_des: es ? toHtmlParagraphs(es.descripcion) : "",
         es_mat: es?.materiales || {},
       };

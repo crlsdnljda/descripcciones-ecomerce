@@ -15,17 +15,22 @@ async function processGeneration(
   promptTemplate: string,
   model: string,
   systemPrompt: string | null,
-  materialsLibrary: Record<string, string[]> | null
+  materialsLibrary: Record<string, string[]> | null,
+  idColumn?: string | null
 ) {
   const results: JobResult[] = [];
   let completed = 0;
   let errorCount = 0;
 
   for (const product of matchedProducts) {
+    const rawData = product.rawData as Record<string, unknown>;
+    const mappedRef = idColumn && rawData[idColumn] != null
+      ? String(rawData[idColumn])
+      : product.externalId;
+
     try {
       // Replace {{variables}} in prompt
       let prompt = promptTemplate;
-      const rawData = product.rawData as Record<string, unknown>;
       for (const [key, value] of Object.entries(rawData)) {
         prompt = prompt.replaceAll(`{{${key}}}`, String(value ?? ""));
       }
@@ -57,11 +62,11 @@ async function processGeneration(
       });
 
       completed++;
-      results.push({ ref: product.externalId, status: "ok" });
+      results.push({ ref: mappedRef, status: "ok" });
     } catch (error) {
       errorCount++;
       const msg = error instanceof Error ? error.message : "Unknown error";
-      results.push({ ref: product.externalId, status: "error", error: msg });
+      results.push({ ref: mappedRef, status: "error", error: msg });
     }
 
     // Update job progress after each product
@@ -127,22 +132,23 @@ export async function POST(
       );
     }
 
-    // Get products matching references (by externalId first, then by any rawData value)
+    // Get products matching references (by externalId, then by rawData[idColumn])
     const allProducts = await db
       .select()
       .from(products)
       .where(eq(products.projectId, projectId));
 
+    const idColumn = project.idColumn;
     const byExtId = new Map(allProducts.map((p) => [p.externalId, p]));
 
-    // Build secondary index: rawData string values → product (skip values already in byExtId)
-    const byRawValue = new Map<string, (typeof allProducts)[0]>();
-    for (const p of allProducts) {
-      const rawData = p.rawData as Record<string, unknown>;
-      for (const value of Object.values(rawData)) {
-        const str = String(value ?? "").trim();
-        if (str && !byExtId.has(str) && !byRawValue.has(str)) {
-          byRawValue.set(str, p);
+    // Secondary index: rawData[idColumn] → product (mapped reference)
+    const byMappedRef = new Map<string, (typeof allProducts)[0]>();
+    if (idColumn) {
+      for (const p of allProducts) {
+        const rawData = p.rawData as Record<string, unknown>;
+        const ref = rawData[idColumn] != null ? String(rawData[idColumn]).trim() : "";
+        if (ref && !byExtId.has(ref) && !byMappedRef.has(ref)) {
+          byMappedRef.set(ref, p);
         }
       }
     }
@@ -150,7 +156,7 @@ export async function POST(
     const matchedSet = new Set<string>();
     const matchedProducts: (typeof allProducts)[0][] = [];
     for (const ref of references) {
-      const p = byExtId.get(ref) || byRawValue.get(ref);
+      const p = byExtId.get(ref) || byMappedRef.get(ref);
       if (p && !matchedSet.has(p.id)) {
         matchedSet.add(p.id);
         matchedProducts.push(p);
@@ -211,7 +217,8 @@ export async function POST(
       promptTemplate,
       project.openaiModelGeneration || "gpt-4o",
       project.systemPrompt,
-      (project.materialsLibrary as Record<string, string[]>) || null
+      (project.materialsLibrary as Record<string, string[]>) || null,
+      idColumn
     ).catch((err) => {
       console.error("Background generation failed:", err);
       db.update(jobs)

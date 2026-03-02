@@ -15,10 +15,17 @@ export async function GET(
   const { projectId } = await params;
 
   try {
+    const [project] = await db
+      .select({ idColumn: projects.idColumn })
+      .from(projects)
+      .where(eq(projects.id, projectId));
+    const idColumn = project?.idColumn;
+
     const reviewedDescs = await db
       .select({
         descId: descriptions.id,
         externalId: products.externalId,
+        rawData: products.rawData,
         outputJson: descriptions.outputJson,
       })
       .from(descriptions)
@@ -47,9 +54,13 @@ export async function GET(
       for (const t of descTranslations) {
         translationMap[t.language] = t.outputJson;
       }
+      const raw = desc.rawData as Record<string, unknown>;
+      const ref = idColumn && raw[idColumn] != null
+        ? String(raw[idColumn])
+        : desc.externalId;
       return {
         descriptionId: desc.descId,
-        referencia: desc.externalId,
+        referencia: ref,
         es: desc.outputJson,
         translations: translationMap,
       };

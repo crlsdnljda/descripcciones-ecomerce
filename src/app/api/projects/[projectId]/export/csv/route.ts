@@ -23,6 +23,7 @@ export async function GET(
     }
 
     const langs = (project.languages as string[]) || [];
+    const idColumn = project.idColumn;
 
     // Build headers
     const headers = ["Referencia", "es_des", "es_mat"];
@@ -35,6 +36,7 @@ export async function GET(
       .select({
         descId: descriptions.id,
         externalId: products.externalId,
+        rawData: products.rawData,
         outputJson: descriptions.outputJson,
       })
       .from(descriptions)
@@ -60,8 +62,12 @@ export async function GET(
 
     for (const desc of reviewedDescs) {
       const es = desc.outputJson as DescriptionOutput | null;
+      const raw = desc.rawData as Record<string, unknown>;
+      const ref = idColumn && raw[idColumn] != null
+        ? String(raw[idColumn])
+        : desc.externalId;
       const values: string[] = [
-        desc.externalId,
+        ref,
         es ? toHtmlParagraphs(es.descripcion) : "",
         es?.materiales ? JSON.stringify(es.materiales) : "",
       ];

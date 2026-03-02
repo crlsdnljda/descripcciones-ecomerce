@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/core/db";
-import { products, descriptions, jobs } from "@/core/db/schema";
+import { products, descriptions, jobs, projects } from "@/core/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // GET /api/projects/[projectId]/ref-status?refs=ref1,ref2,...
@@ -15,6 +15,12 @@ export async function GET(
 
   if (!refs.length) return NextResponse.json({ statuses: {}, running: false });
 
+  const [project] = await db
+    .select({ idColumn: projects.idColumn })
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  const idColumn = project?.idColumn;
+
   // Get products for this project
   const prods = await db
     .select({ id: products.id, externalId: products.externalId, rawData: products.rawData })
@@ -24,14 +30,14 @@ export async function GET(
   // Primary index: externalId → productId
   const prodMap = new Map(prods.map((p) => [p.externalId, p.id]));
 
-  // Secondary index: rawData string values → productId (for references that don't match externalId)
-  const rawValueMap = new Map<string, string>();
-  for (const p of prods) {
-    const rawData = p.rawData as Record<string, unknown>;
-    for (const value of Object.values(rawData)) {
-      const str = String(value ?? "").trim();
-      if (str && !prodMap.has(str) && !rawValueMap.has(str)) {
-        rawValueMap.set(str, p.id);
+  // Secondary index: rawData[idColumn] → productId (mapped reference)
+  const mappedRefMap = new Map<string, string>();
+  if (idColumn) {
+    for (const p of prods) {
+      const rawData = p.rawData as Record<string, unknown>;
+      const ref = rawData[idColumn] != null ? String(rawData[idColumn]).trim() : "";
+      if (ref && !prodMap.has(ref) && !mappedRefMap.has(ref)) {
+        mappedRefMap.set(ref, p.id);
       }
     }
   }
@@ -62,7 +68,7 @@ export async function GET(
   // "not_found" = reference not in products
   const statuses: Record<string, string> = {};
   for (const ref of refs) {
-    const productId = prodMap.get(ref) || rawValueMap.get(ref);
+    const productId = prodMap.get(ref) || mappedRefMap.get(ref);
     if (!productId) {
       statuses[ref] = "not_found";
       continue;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/core/db";
-import { descriptions, products } from "@/core/db/schema";
+import { descriptions, products, projects } from "@/core/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 // GET /api/projects/[projectId]/descriptions — list descriptions with filters
@@ -14,11 +14,18 @@ export async function GET(
   const search = searchParams.get("search") || "";
 
   try {
+    const [project] = await db
+      .select({ idColumn: projects.idColumn })
+      .from(projects)
+      .where(eq(projects.id, projectId));
+    const idColumn = project?.idColumn;
+
     const allDescs = await db
       .select({
         id: descriptions.id,
         productId: descriptions.productId,
         externalId: products.externalId,
+        rawData: products.rawData,
         imageUrl: products.imageUrl,
         categoria: sql<string | null>`COALESCE(${products.rawData}->>'categoria', ${products.rawData}->>'category', ${products.rawData}->>'product_type')`.as("categoria"),
         promptUsed: descriptions.promptUsed,
@@ -39,11 +46,20 @@ export async function GET(
       )
       .orderBy(descriptions.createdAt);
 
+    // Map externalId to the configured idColumn value
+    const mapped = allDescs.map((d) => {
+      const raw = d.rawData as Record<string, unknown>;
+      const ref = idColumn && raw[idColumn] != null
+        ? String(raw[idColumn])
+        : d.externalId;
+      return { ...d, externalId: ref };
+    });
+
     const filtered = search
-      ? allDescs.filter((d) =>
+      ? mapped.filter((d) =>
           d.externalId.toLowerCase().includes(search.toLowerCase())
         )
-      : allDescs;
+      : mapped;
 
     return NextResponse.json(filtered);
   } catch (error) {
