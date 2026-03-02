@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, KeyboardEvent } from "react";
 import { useParams } from "next/navigation";
-import { Sparkles, Save, Trash2, X, AlertTriangle } from "lucide-react";
+import { Sparkles, Save, Trash2, X, AlertTriangle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useColumnsStore } from "@/stores/columns-store";
 
@@ -28,6 +28,7 @@ export default function GeneratePage() {
   const [refInput, setRefInput] = useState("");
   const [refStatuses, setRefStatuses] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState(false);
+  const [loadingRefs, setLoadingRefs] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [progress, setProgress] = useState({ total: 0, completed: 0, errors: 0 });
   const [results, setResults] = useState<{ ref: string; status: string; error?: string }[]>([]);
@@ -103,6 +104,21 @@ export default function GeneratePage() {
   };
 
   const clearAllTags = () => setTags([]);
+
+  const loadAllRefs = async () => {
+    setLoadingRefs(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/refs`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setTags(data.refs);
+      toast.success(`${data.total} referencias cargadas`);
+    } catch {
+      toast.error("Error al cargar referencias");
+    } finally {
+      setLoadingRefs(false);
+    }
+  };
 
   const handleRefKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === "," || e.key === ";") {
@@ -395,14 +411,24 @@ export default function GeneratePage() {
       <div className="rounded-lg border border-border p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-medium">Referencias ({tags.length})</h3>
-          {tags.length > 0 && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={clearAllTags}
-              className="text-xs text-muted-foreground hover:text-destructive"
+              onClick={loadAllRefs}
+              disabled={loadingRefs}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent"
             >
-              Limpiar
+              <Download className="h-3 w-3" />
+              {loadingRefs ? "Cargando..." : "Cargar todas"}
             </button>
-          )}
+            {tags.length > 0 && (
+              <button
+                onClick={clearAllTags}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Status alert */}
@@ -485,7 +511,7 @@ export default function GeneratePage() {
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          Enter, coma o pega una lista.
+          Enter, coma o pega una lista. Sin límite de referencias.
         </p>
       </div>
     </div>

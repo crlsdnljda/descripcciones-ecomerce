@@ -127,9 +127,11 @@ export async function POST(
       references.includes(p.externalId)
     );
 
+    const notFoundCount = references.length - matchedProducts.length;
+
     if (!matchedProducts.length) {
       return NextResponse.json(
-        { error: "No products found for the given references" },
+        { error: `No se encontraron productos. ${notFoundCount} referencias no coinciden con ningún producto.` },
         { status: 404 }
       );
     }
@@ -203,14 +205,16 @@ export async function POST(
     });
 
     // Return immediately with job ID
-    const skippedMsg = skippedCount > 0 ? ` (${skippedCount} pendientes de revisar, omitidas)` : "";
+    const skippedMsg = skippedCount > 0 ? ` | ${skippedCount} pendientes de revisar` : "";
     const regenCount = reviewedToDelete.length;
-    const regenMsg = regenCount > 0 ? ` (${regenCount} regeneradas)` : "";
+    const regenMsg = regenCount > 0 ? ` | ${regenCount} regeneradas` : "";
+    const notFoundMsg = notFoundCount > 0 ? ` | ${notFoundCount} no encontradas` : "";
     return NextResponse.json({
       jobId,
-      message: `Generación iniciada para ${allowedProducts.length} productos${skippedMsg}${regenMsg}`,
+      message: `Generación iniciada: ${allowedProducts.length} productos${regenMsg}${skippedMsg}${notFoundMsg}`,
       total: allowedProducts.length,
       skipped: skippedCount,
+      notFound: notFoundCount,
     });
   } catch (error) {
     console.error("Error starting generation:", error);

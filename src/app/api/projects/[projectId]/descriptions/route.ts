@@ -20,6 +20,7 @@ export async function GET(
         productId: descriptions.productId,
         externalId: products.externalId,
         imageUrl: products.imageUrl,
+        categoria: sql<string | null>`${products.rawData}->>'categoria'`.as("categoria"),
         promptUsed: descriptions.promptUsed,
         outputJson: descriptions.outputJson,
         status: descriptions.status,

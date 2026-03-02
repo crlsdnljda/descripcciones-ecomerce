@@ -10,8 +10,22 @@ interface Description {
   id: string;
   externalId: string;
   imageUrl: string | null;
+  categoria: string | null;
   outputJson: DescriptionOutput | null;
   status: string;
+}
+
+const FOOTWEAR_CATEGORIES = new Set([
+  "alpargatas", "bailarinas", "botas", "botas de agua", "botas de fútbol",
+  "botines", "calzado respetuoso", "chanclas", "mocasines", "náuticos",
+  "sandalias", "sneakers", "zapatillas", "zapatillas con luces",
+  "zapatillas de casa", "zapatos", "zapatos bebé", "zapatos deportivos",
+  "zapatos respetuosos bebe", "zuecos",
+]);
+
+function isFootwear(categoria: string | null | undefined): boolean {
+  if (!categoria) return false;
+  return FOOTWEAR_CATEGORIES.has(categoria.toLowerCase());
 }
 
 export default function ReviewPage() {
@@ -184,7 +198,7 @@ export default function ReviewPage() {
 
     const outputJson: DescriptionOutput = {
       descripcion: editDesc,
-      materiales: editMat,
+      materiales: isFootwear(current.categoria) ? editMat : {},
     };
 
     try {
@@ -408,7 +422,7 @@ export default function ReviewPage() {
               </p>
             </div>
 
-            <div>
+            {isFootwear(current.categoria) && <div>
               <label className="mb-1 block text-sm font-medium">Materiales</label>
               <div className="space-y-3 rounded-md border border-border p-3">
                 {Object.entries(editMat).map(([zone, materials]) => (
@@ -566,7 +580,7 @@ export default function ReviewPage() {
                   </button>
                 )}
               </div>
-            </div>
+            </div>}
 
             <div className="flex items-center gap-3">
               {statusFilter === "generated" && (
