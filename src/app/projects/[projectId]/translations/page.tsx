@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Languages, RefreshCw } from "lucide-react";
+import { Languages, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DescriptionOutput } from "@/core/db/schema/descriptions";
 
@@ -22,6 +22,9 @@ export default function TranslationsPage() {
   const [translating, setTranslating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ total: 0, completed: 0, errors: 0 });
+  const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; ref: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = async () => {
@@ -93,7 +96,6 @@ export default function TranslationsPage() {
           toast.success(data.message);
           startPolling(data.jobId);
         } else {
-          // No job created (nothing to translate)
           toast.success(data.message);
           setTranslating(false);
         }
@@ -107,13 +109,40 @@ export default function TranslationsPage() {
     }
   };
 
+  const deleteTranslations = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/translations?descriptionId=${deleteTarget.id}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`${data.deleted} traducciones eliminadas de ${deleteTarget.ref}`);
+        fetchData();
+      } else {
+        toast.error(data.error || "Error al eliminar");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const filteredRows = search
+    ? rows.filter((r) => r.referencia.toLowerCase().includes(search.toLowerCase()))
+    : rows;
+
   if (loading) {
     return <div className="py-10 text-center text-muted-foreground">Cargando...</div>;
   }
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
           onClick={translate}
           disabled={translating}
@@ -130,8 +159,19 @@ export default function TranslationsPage() {
           <RefreshCw className="h-4 w-4" />
         </button>
 
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar referencia..."
+            className="rounded-md border border-border py-1.5 pl-9 pr-3 text-sm focus:border-accent focus:outline-none"
+          />
+        </div>
+
         <span className="text-sm text-muted-foreground">
-          {rows.length} descripciones revisadas | Idiomas: {languages.join(", ") || "ninguno"}
+          {filteredRows.length} de {rows.length} descripciones | Idiomas: {languages.join(", ") || "ninguno"}
         </span>
       </div>
 
@@ -161,6 +201,35 @@ export default function TranslationsPage() {
         </div>
       )}
 
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg">
+            <h3 className="mb-2 text-sm font-semibold">Eliminar traducciones</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              ¿Eliminar todas las traducciones de <span className="font-mono font-bold">{deleteTarget.ref}</span>?
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={deleteTranslations}
+                disabled={deleting}
+                className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 disabled:opacity-50"
+              >
+                {deleting ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-16 text-center">
           <p className="text-muted-foreground">
@@ -183,35 +252,50 @@ export default function TranslationsPage() {
                     {lang}_des / {lang}_mat
                   </th>
                 ))}
+                <th className="px-3 py-2 text-center font-medium w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.descriptionId} className="border-b border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs font-bold">
-                    {row.referencia}
-                  </td>
-                  <td className="max-w-[200px] truncate px-3 py-2 text-xs" title={row.es?.descripcion}>
-                    {row.es?.descripcion?.slice(0, 80)}...
-                  </td>
-                  <td className="max-w-[150px] truncate px-3 py-2 text-xs font-mono">
-                    {row.es?.materiales ? JSON.stringify(row.es.materiales).slice(0, 60) + "..." : ""}
-                  </td>
-                  {languages.map((lang) => {
-                    const t = row.translations[lang];
-                    return (
-                      <td
-                        key={`${lang}_cell`}
-                        colSpan={2}
-                        className={`max-w-[300px] truncate px-3 py-2 text-xs ${!t ? "text-muted-foreground italic" : ""}`}
-                        title={t?.descripcion}
-                      >
-                        {t ? (t.descripcion?.slice(0, 60) + "...") : "pendiente"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {filteredRows.map((row) => {
+                const hasTranslations = Object.values(row.translations).some((t) => t !== null);
+                return (
+                  <tr key={row.descriptionId} className="border-b border-border hover:bg-muted/30">
+                    <td className="px-3 py-2 font-mono text-xs font-bold">
+                      {row.referencia}
+                    </td>
+                    <td className="max-w-[200px] truncate px-3 py-2 text-xs" title={row.es?.descripcion}>
+                      {row.es?.descripcion?.slice(0, 80)}...
+                    </td>
+                    <td className="max-w-[150px] truncate px-3 py-2 text-xs font-mono">
+                      {row.es?.materiales ? JSON.stringify(row.es.materiales).slice(0, 60) + "..." : ""}
+                    </td>
+                    {languages.map((lang) => {
+                      const t = row.translations[lang];
+                      return (
+                        <td
+                          key={`${lang}_cell`}
+                          colSpan={2}
+                          className={`max-w-[300px] truncate px-3 py-2 text-xs ${!t ? "text-muted-foreground italic" : ""}`}
+                          title={t?.descripcion}
+                        >
+                          {t ? (t.descripcion?.slice(0, 60) + "...") : "pendiente"}
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2 text-center">
+                      {hasTranslations && (
+                        <button
+                          onClick={() => setDeleteTarget({ id: row.descriptionId, ref: row.referencia })}
+                          className="rounded p-1 text-muted-foreground hover:text-destructive"
+                          title="Eliminar traducciones"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

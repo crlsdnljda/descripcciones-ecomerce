@@ -208,3 +208,38 @@ export async function POST(
     return NextResponse.json({ error: "Error starting translation" }, { status: 500 });
   }
 }
+
+// DELETE /api/projects/[projectId]/translations?descriptionId=xxx — delete all translations for a description
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  const { projectId } = await params;
+  const descriptionId = request.nextUrl.searchParams.get("descriptionId");
+
+  if (!descriptionId) {
+    return NextResponse.json({ error: "descriptionId is required" }, { status: 400 });
+  }
+
+  try {
+    // Verify the description belongs to this project
+    const [desc] = await db
+      .select({ id: descriptions.id })
+      .from(descriptions)
+      .where(and(eq(descriptions.id, descriptionId), eq(descriptions.projectId, projectId)));
+
+    if (!desc) {
+      return NextResponse.json({ error: "Description not found" }, { status: 404 });
+    }
+
+    const deleted = await db
+      .delete(translations)
+      .where(eq(translations.descriptionId, descriptionId))
+      .returning({ id: translations.id });
+
+    return NextResponse.json({ deleted: deleted.length });
+  } catch (error) {
+    console.error("Error deleting translations:", error);
+    return NextResponse.json({ error: "Error deleting translations" }, { status: 500 });
+  }
+}
