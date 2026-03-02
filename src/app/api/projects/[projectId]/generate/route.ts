@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/core/db";
-import { projects, products, descriptions, jobs, translations } from "@/core/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { projects, products, descriptions, jobs } from "@/core/db/schema";
+import { eq, and } from "drizzle-orm";
 import { generateId } from "@/lib/utils";
 import { generateDescription } from "@/core/services/openai";
 import type { JobResult } from "@/core/db/schema/jobs";
@@ -136,42 +136,25 @@ export async function POST(
       );
     }
 
-    // Check existing descriptions — only block "generated" (pending review)
-    // Allow "reviewed" (will delete old desc + translations and re-generate)
+    // Check existing descriptions — skip products that already have a description
     const existingDescs = await db
       .select({ id: descriptions.id, productId: descriptions.productId, status: descriptions.status })
       .from(descriptions)
       .where(eq(descriptions.projectId, projectId));
 
-    const blockedProductIds = new Set(
-      existingDescs.filter((d) => d.status === "generated").map((d) => d.productId)
-    );
-    const reviewedDescIds = existingDescs
-      .filter((d) => d.status === "reviewed")
-      .map((d) => ({ id: d.id, productId: d.productId }));
-    const reviewedProductIds = new Set(reviewedDescIds.map((d) => d.productId));
+    const existingProductIds = new Set(existingDescs.map((d) => d.productId));
 
-    // Only allow products that are NOT blocked (pending review)
-    const allowedProducts = matchedProducts.filter((p) => !blockedProductIds.has(p.id));
+    // Only allow products that do NOT have any description yet
+    const allowedProducts = matchedProducts.filter((p) => !existingProductIds.has(p.id));
     const skippedCount = matchedProducts.length - allowedProducts.length;
 
     if (!allowedProducts.length) {
       return NextResponse.json({
         jobId: null,
-        message: `Las ${matchedProducts.length} referencias tienen descripciones pendientes de revisar`,
+        message: `Las ${matchedProducts.length} referencias ya tienen descripciones (generadas o revisadas)`,
         total: 0,
         skipped: skippedCount,
       });
-    }
-
-    // For "reviewed" products: delete old descriptions + their translations before re-generating
-    const reviewedToDelete = reviewedDescIds.filter((d) =>
-      allowedProducts.some((p) => p.id === d.productId)
-    );
-    if (reviewedToDelete.length > 0) {
-      const descIdsToDelete = reviewedToDelete.map((d) => d.id);
-      await db.delete(translations).where(inArray(translations.descriptionId, descIdsToDelete));
-      await db.delete(descriptions).where(inArray(descriptions.id, descIdsToDelete));
     }
 
     // Create job record
@@ -205,13 +188,11 @@ export async function POST(
     });
 
     // Return immediately with job ID
-    const skippedMsg = skippedCount > 0 ? ` | ${skippedCount} pendientes de revisar` : "";
-    const regenCount = reviewedToDelete.length;
-    const regenMsg = regenCount > 0 ? ` | ${regenCount} regeneradas` : "";
+    const skippedMsg = skippedCount > 0 ? ` | ${skippedCount} ya existentes` : "";
     const notFoundMsg = notFoundCount > 0 ? ` | ${notFoundCount} no encontradas` : "";
     return NextResponse.json({
       jobId,
-      message: `Generación iniciada: ${allowedProducts.length} productos${regenMsg}${skippedMsg}${notFoundMsg}`,
+      message: `Generación iniciada: ${allowedProducts.length} productos${skippedMsg}${notFoundMsg}`,
       total: allowedProducts.length,
       skipped: skippedCount,
       notFound: notFoundCount,
