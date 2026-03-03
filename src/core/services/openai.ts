@@ -7,16 +7,18 @@ El resultado debe respetar exactamente esta estructura:
 {
   "descripcion": "Texto del primer parrafo.\\nTexto del segundo parrafo.",
   "materiales": {
-    "Empeine": ["material1", "material2"],
-    "Forro y plantilla": ["material1", "material2"],
-    "Suela": ["material1", "material2"]
+    "Empeine": ["Piel", "Sintético"],
+    "Forro y plantilla": ["Textil"],
+    "Suela": ["Goma"]
   }
 }
 
 Reglas de formato:
 - Devuelve EXCLUSIVAMENTE un objeto JSON valido, sin texto adicional.
 - "descripcion" es un string con parrafos separados por \\n.
-- "materiales" es un objeto donde cada clave es una zona del producto y el valor es un array de materiales.
+- "materiales" es un objeto donde cada clave es una zona del producto y el valor es un array de materiales REALES identificados a partir de la imagen y datos del producto.
+- NUNCA devuelvas placeholders, ejemplos genéricos ni texto como "material1", "material_ejemplo", "material2". Identifica los materiales reales del producto.
+- Si no puedes identificar un material con certeza, haz tu mejor estimación basándote en la apariencia del producto en la imagen.
 - No uses comillas simples ni dobles dentro de los textos.
 - Usa siempre las dos claves: "descripcion" y "materiales".`;
 
