@@ -145,34 +145,45 @@ export async function translateDescriptionBatch(
     }
   }
 
-  const materialsRules = hasMaterials
-    ? `- The keys inside "materiales" (zone names) must be translated to each target language.
-- Material VALUES must be Capitalized (first letter uppercase), e.g. "caucho" → "Caucho", "rubber" → "Rubber".
-- If a zone has multiple materials, keep them as an array: ["Sintético", "Textil"].
-- Translate the zone keys AND the material values to each target language.`
-    : `- "materiales" must be an empty object {} (this product has no materials).`;
+  // Build materials instructions with concrete example
+  let materialsBlock = "";
+  if (hasMaterials) {
+    // Show the source materials explicitly so the AI knows what to translate
+    const sourceZones = Object.entries(output.materiales)
+      .map(([zone, vals]) => `  "${zone}": ${JSON.stringify(vals)}`)
+      .join(",\n");
 
-  const exampleMaterials = hasMaterials
-    ? `"TranslatedZone": ["Material1", "Material2"]`
-    : "";
+    materialsBlock = `
+MATERIALS TRANSLATION RULES:
+The source product has these materials (in Spanish):
+{
+${sourceZones}
+}
 
-  const prompt = `Translate the following product content to these languages: ${langList}.
+You MUST translate BOTH:
+1. The zone KEYS (e.g. "Empeine" → "Upper" in English, "Tige" in French, "Obermaterial" in German)
+2. The material VALUES (e.g. "Sintético" → "Synthetic" in English, "Synthétique" in French, "Synthetik" in German)
+
+Each material value must be Capitalized (first letter uppercase).
+If a zone has multiple materials, keep them as an array.
+Do NOT return the Spanish material names — translate them to each target language.`;
+  } else {
+    materialsBlock = `\n"materiales" must be an empty object {} (this product has no materials).`;
+  }
+
+  const prompt = `Translate the following Spanish product content to these languages: ${langList}.
 
 Return a JSON object where each key is the language code and the value has the structure {"descripcion": "...", "materiales": {...}}.
 
 Rules:
+- The source language is SPANISH. Translate everything to the target languages.
 - "descripcion" MUST contain the full translated text for each language, never empty.
-${materialsRules}
+${materialsBlock}
 
-Content to translate:
+Source content (Spanish):
 ${JSON.stringify(output, null, 2)}${referenceBlock}
 
-Expected response format:
-{
-  ${targetLangs.map((code) => `"${code}": { "descripcion": "translated text...", "materiales": { ${exampleMaterials} } }`).join(",\n  ")}
-}
-
-Return only the JSON, no additional text.`;
+Return ONLY a valid JSON object with language codes as keys. No additional text.`;
 
   const completion = await client.chat.completions.create({
     model,
