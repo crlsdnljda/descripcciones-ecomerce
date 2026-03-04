@@ -335,25 +335,61 @@ export default function ProjectSettingsPage() {
             </p>
           )}
           {addingMatZone ? (
-            <div className="relative">
-              <input
-                type="text"
-                value={matZoneInput}
-                onChange={(e) => setMatZoneInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && matZoneInput.trim()) {
-                    const updated = { ...matManual, [matZoneInput.trim()]: [] };
-                    saveMaterials(updated);
-                    setMatZoneInput("");
-                    setAddingMatZone(false);
-                  }
-                  if (e.key === "Escape") { setAddingMatZone(false); setMatZoneInput(""); }
-                }}
-                onBlur={() => setTimeout(() => { setAddingMatZone(false); setMatZoneInput(""); }, 150)}
-                placeholder="Nombre de zona..."
-                className="w-44 rounded-md border border-accent bg-background px-3 py-1.5 text-xs focus:outline-none"
-                autoFocus
-              />
+            <div className="space-y-2 rounded-md border border-accent bg-muted/30 p-3">
+              {/* Existing zones not yet in manual library */}
+              {(() => {
+                const existingZones = Object.keys(materialsLib).filter((z) => matManual[z] === undefined);
+                if (existingZones.length === 0) return null;
+                return (
+                  <div>
+                    <span className="mb-1.5 block text-xs text-muted-foreground">Zonas existentes:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {existingZones.map((zone) => (
+                        <button
+                          key={zone}
+                          type="button"
+                          onClick={() => {
+                            const updated = { ...matManual, [zone]: [] };
+                            saveMaterials(updated);
+                            setAddingMatZone(false);
+                          }}
+                          className="rounded-md border border-border bg-background px-2.5 py-1 text-xs hover:border-accent hover:text-accent"
+                        >
+                          {zone}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Custom new zone input */}
+              <div>
+                <span className="mb-1.5 block text-xs text-muted-foreground">O escribe una nueva:</span>
+                <input
+                  type="text"
+                  value={matZoneInput}
+                  onChange={(e) => setMatZoneInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && matZoneInput.trim()) {
+                      const updated = { ...matManual, [matZoneInput.trim()]: [] };
+                      saveMaterials(updated);
+                      setMatZoneInput("");
+                      setAddingMatZone(false);
+                    }
+                    if (e.key === "Escape") { setAddingMatZone(false); setMatZoneInput(""); }
+                  }}
+                  placeholder="Nombre de zona..."
+                  className="w-44 rounded-md border border-border bg-background px-3 py-1.5 text-xs focus:border-accent focus:outline-none"
+                  autoFocus
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setAddingMatZone(false); setMatZoneInput(""); }}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancelar
+              </button>
             </div>
           ) : (
             <button
