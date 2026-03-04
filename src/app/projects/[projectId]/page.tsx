@@ -25,6 +25,7 @@ export default function ProductsPage() {
   const projectId = params.projectId as string;
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [idColumn, setIdColumn] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const { setVisibleCols, toggleColumn: toggleColumnStore, getVisibleCols } = useColumnsStore();
   const visibleCols = getVisibleCols(projectId);
@@ -63,6 +64,7 @@ export default function ProductsPage() {
       if (res.ok) {
         const data = await res.json();
         setProducts(data.products);
+        if (data.idColumn !== undefined) setIdColumn(data.idColumn);
         setPagination(data.pagination);
       }
     } catch {
@@ -248,7 +250,9 @@ export default function ProductsPage() {
                   className="border-b border-border hover:bg-muted/30"
                 >
                   <td className="px-3 py-2 font-mono text-xs">
-                    {product.externalId}
+                    {idColumn && product.rawData[idColumn] != null
+                      ? String(product.rawData[idColumn])
+                      : product.externalId}
                   </td>
                   {visibleCols.map((col) => {
                     const val = product.rawData[col];
